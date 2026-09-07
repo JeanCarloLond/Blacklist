@@ -24,6 +24,8 @@ export function TasksScreen() {
   const filter = useTasksStore((state) => state.filter);
   const setFilter = useTasksStore((state) => state.setFilter);
   const toggleComplete = useTasksStore((state) => state.toggleComplete);
+  const isDoneToday = useTasksStore((state) => state.isDoneToday);
+  const completedToday = useTasksStore((state) => state.completedToday);
   const archive = useTasksStore((state) => state.archive);
   const remove = useTasksStore((state) => state.remove);
 
@@ -120,9 +122,11 @@ export function TasksScreen() {
           tasks.length === 0 && styles.listEmpty,
         ]}
         keyboardShouldPersistTaps="handled"
+        extraData={completedToday}
         renderItem={({ item }) => (
           <TaskItem
             task={item}
+            completed={isDoneToday(item)}
             category={byId(item.categoryId)}
             onToggle={() => void toggleComplete(item)}
             onPress={() => navigation.navigate('TaskForm', { taskId: item.id })}

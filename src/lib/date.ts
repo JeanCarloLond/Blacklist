@@ -78,6 +78,14 @@ export function startOfMonth(key: DayKey): DayKey {
   return `${key.slice(0, 7)}-01`;
 }
 
+/** Número de días del mes al que pertenece `key`. */
+export function daysInMonth(key: DayKey): number {
+  const year = Number(key.slice(0, 4));
+  const month = Number(key.slice(5, 7));
+  // El día 0 del mes siguiente es el último del actual.
+  return new Date(year, month, 0).getDate();
+}
+
 /** Rango inclusivo de `DayKey` entre dos fechas. */
 export function dayRange(from: DayKey, to: DayKey): DayKey[] {
   const total = daysBetween(from, to);

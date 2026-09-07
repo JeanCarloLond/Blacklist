@@ -3,7 +3,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useMemo, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -11,8 +11,16 @@ import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Text } from '@/components/ui/Text';
 import { TextField } from '@/components/ui/TextField';
-import type { Priority } from '@/domain/models';
-import { addDays, formatDayMonth, fromDayKey, toDayKey, todayKey, type DayKey } from '@/lib/date';
+import type { Priority, RecurrenceType } from '@/domain/models';
+import {
+  addDays,
+  formatDayMonth,
+  fromDayKey,
+  toDayKey,
+  todayKey,
+  type DayKey,
+  type Weekday,
+} from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useCategoriesStore } from '@/store/categoriesStore';
@@ -24,6 +32,25 @@ const PRIORITIES: [Priority, string][] = [
   [0, 'Baja'],
   [1, 'Media'],
   [2, 'Alta'],
+];
+
+const RECURRENCES: [RecurrenceType, string][] = [
+  ['none', 'Una vez'],
+  ['daily', 'Cada día'],
+  ['weekdays', 'De lunes a viernes'],
+  ['weekly', 'Días concretos'],
+  ['monthly', 'Cada mes'],
+];
+
+/** La semana empieza en lunes, como en el resto de la app. */
+const WEEK: [Weekday, string][] = [
+  [1, 'L'],
+  [2, 'M'],
+  [3, 'X'],
+  [4, 'J'],
+  [5, 'V'],
+  [6, 'S'],
+  [0, 'D'],
 ];
 
 export function TaskFormScreen() {
@@ -49,12 +76,33 @@ export function TaskFormScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(existing?.categoryId ?? null);
   const [priority, setPriority] = useState<Priority>(existing?.priority ?? 1);
   const [dueDate, setDueDate] = useState<DayKey | null>(existing?.dueDate ?? null);
+  const [recurrence, setRecurrence] = useState<RecurrenceType>(
+    existing?.recurrenceType ?? 'none',
+  );
+  const [weekdays, setWeekdays] = useState<Weekday[]>(existing?.recurrenceDays ?? []);
   const [showPicker, setShowPicker] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
   const today = todayKey();
   const tomorrow = addDays(today, 1);
+  const repeats = recurrence !== 'none';
+
+  /**
+   * Al pasar a recurrente hace falta una fecha de inicio: sin ella la serie no
+   * tiene origen y las reglas semanales no sabrían desde cuándo contar. Se
+   * asume hoy, que es lo que espera quien crea un hábito ahora mismo.
+   */
+  const handleRecurrenceChange = (value: RecurrenceType) => {
+    setRecurrence(value);
+    if (value !== 'none' && dueDate === null) setDueDate(today);
+  };
+
+  const toggleWeekday = (day: Weekday) => {
+    setWeekdays((current) =>
+      current.includes(day) ? current.filter((item) => item !== day) : [...current, day],
+    );
+  };
 
   const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
     setShowPicker(false);
@@ -76,7 +124,15 @@ export function TaskFormScreen() {
         categoryId,
         priority,
         dueDate,
+        recurrenceType: recurrence,
+        recurrenceDays: recurrence === 'weekly' ? weekdays : [],
+        // El día del mes se deduce de la fecha de inicio en vez de pedirlo
+        // aparte: un segundo selector para un dato que ya está implícito solo
+        // añade una forma más de contradecirse.
+        recurrenceDayOfMonth:
+          recurrence === 'monthly' ? Number((dueDate ?? today).slice(8, 10)) : null,
       };
+
       if (existing) await editTask(existing.id, payload);
       else await addTask(payload);
       navigation.goBack();
@@ -155,6 +211,105 @@ export function TaskFormScreen() {
 
         <View style={styles.field}>
           <Text variant="label" color="textSecondary">
+            Repetición
+          </Text>
+          <View style={styles.optionsRow}>
+            {RECURRENCES.map(([value, label]) => (
+              <Chip
+                key={value}
+                label={label}
+                selected={recurrence === value}
+                onPress={() => handleRecurrenceChange(value)}
+              />
+            ))}
+          </View>
+
+          {recurrence === 'weekly' ? (
+            <View style={styles.weekRow}>
+              {WEEK.map(([day, label]) => {
+                const selected = weekdays.includes(day);
+                return (
+                  <Pressable
+                    key={day}
+                    onPress={() => toggleWeekday(day)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`Repetir los ${label}`}
+                    style={[styles.weekDay, selected && styles.weekDaySelected]}
+                  >
+                    <Text
+                      variant="label"
+                      style={{
+                        color: selected ? theme.colors.textOnAccent : theme.colors.textSecondary,
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {recurrence === 'weekly' && weekdays.length === 0 ? (
+            <Text variant="caption" color="textMuted">
+              Sin días marcados se repetirá cada semana el mismo día en que empieza.
+            </Text>
+          ) : null}
+
+          {recurrence === 'monthly' ? (
+            <Text variant="caption" color="textMuted">
+              Se repetirá el día {Number((dueDate ?? today).slice(8, 10))} de cada mes. En los
+              meses más cortos, el último día.
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.field}>
+          <Text variant="label" color="textSecondary">
+            {repeats ? 'Empieza el' : 'Fecha límite'}
+          </Text>
+          <View style={styles.optionsRow}>
+            {!repeats ? (
+              <Chip
+                label="Sin fecha"
+                selected={dueDate === null}
+                onPress={() => setDueDate(null)}
+              />
+            ) : null}
+            <Chip label="Hoy" selected={dueDate === today} onPress={() => setDueDate(today)} />
+            <Chip
+              label="Mañana"
+              selected={dueDate === tomorrow}
+              onPress={() => setDueDate(tomorrow)}
+            />
+            <Chip
+              label={
+                dueDate && dueDate !== today && dueDate !== tomorrow
+                  ? formatDayMonth(dueDate)
+                  : 'Otro día'
+              }
+              selected={dueDate !== null && dueDate !== today && dueDate !== tomorrow}
+              onPress={() => setShowPicker(true)}
+            />
+          </View>
+          {repeats ? (
+            <Text variant="caption" color="textMuted">
+              La tarea no aparecerá antes de esta fecha.
+            </Text>
+          ) : null}
+        </View>
+
+        {showPicker ? (
+          <DateTimePicker
+            value={dueDate ? fromDayKey(dueDate) : new Date()}
+            mode="date"
+            onChange={handleDateChange}
+          />
+        ) : null}
+
+        <View style={styles.field}>
+          <Text variant="label" color="textSecondary">
             Categoría
           </Text>
           <View style={styles.optionsRow}>
@@ -174,42 +329,6 @@ export function TaskFormScreen() {
             ))}
           </View>
         </View>
-
-        <View style={styles.field}>
-          <Text variant="label" color="textSecondary">
-            Fecha límite
-          </Text>
-          <View style={styles.optionsRow}>
-            <Chip
-              label="Sin fecha"
-              selected={dueDate === null}
-              onPress={() => setDueDate(null)}
-            />
-            <Chip label="Hoy" selected={dueDate === today} onPress={() => setDueDate(today)} />
-            <Chip
-              label="Mañana"
-              selected={dueDate === tomorrow}
-              onPress={() => setDueDate(tomorrow)}
-            />
-            <Chip
-              label={
-                dueDate && dueDate !== today && dueDate !== tomorrow
-                  ? formatDayMonth(dueDate)
-                  : 'Otro día'
-              }
-              selected={dueDate !== null && dueDate !== today && dueDate !== tomorrow}
-              onPress={() => setShowPicker(true)}
-            />
-          </View>
-        </View>
-
-        {showPicker ? (
-          <DateTimePicker
-            value={dueDate ? fromDayKey(dueDate) : new Date()}
-            mode="date"
-            onChange={handleDateChange}
-          />
-        ) : null}
 
         <Button
           label={existing ? 'Guardar cambios' : 'Crear tarea'}
@@ -245,6 +364,25 @@ const themedStyles = createStyles((theme) => ({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  weekDay: {
+    flex: 1,
+    aspectRatio: 1,
+    maxHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.pill,
+    borderWidth: theme.layout.borderWidth,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  weekDaySelected: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
   },
   save: {
     marginTop: theme.spacing.sm,

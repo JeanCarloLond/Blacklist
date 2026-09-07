@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Text } from '@/components/ui/Text';
 import type { Category, Task } from '@/domain/models';
+import { describeRecurrence } from '@/domain/recurrence';
 import { formatRelativeDay, isOverdue } from '@/lib/date';
 import { useTheme } from '@/providers/ThemeProvider';
 import { priorityColor } from '@/theme';
@@ -11,6 +12,13 @@ import { createStyles, useThemedStyles } from '@/theme/useThemedStyles';
 
 export type TaskItemProps = {
   task: Task;
+  /**
+   * Estado de completado ya resuelto por el store. Se recibe hecho en vez de
+   * deducirlo de la tarea porque el dato vive en sitios distintos según el
+   * tipo: las únicas guardan `completedAt` y las recurrentes una fila del día
+   * en el registro de constancia.
+   */
+  completed: boolean;
   category?: Category;
   onToggle: () => void;
   onPress: () => void;
@@ -29,6 +37,7 @@ export type TaskItemProps = {
  */
 export function TaskItem({
   task,
+  completed,
   category,
   onToggle,
   onPress,
@@ -37,8 +46,13 @@ export function TaskItem({
   const styles = useThemedStyles(themedStyles);
   const theme = useTheme();
 
-  const completed = task.completedAt !== null;
-  const overdue = !completed && task.dueDate !== null && isOverdue(task.dueDate);
+  const recurrence = describeRecurrence(task);
+  const isRecurring = recurrence !== null;
+
+  // En las recurrentes `dueDate` es la fecha de inicio de la serie, no un
+  // vencimiento, así que mostrarla como "vence" sería mentir.
+  const showDueDate = !isRecurring && task.dueDate !== null;
+  const overdue = !completed && showDueDate && task.dueDate !== null && isOverdue(task.dueDate);
 
   return (
     <Pressable
@@ -80,7 +94,7 @@ export function TaskItem({
           </Text>
         ) : null}
 
-        {category || task.dueDate ? (
+        {category || showDueDate || recurrence ? (
           <View style={styles.meta}>
             {category ? (
               <View style={styles.metaItem}>
@@ -91,7 +105,16 @@ export function TaskItem({
               </View>
             ) : null}
 
-            {task.dueDate ? (
+            {recurrence ? (
+              <View style={styles.metaItem}>
+                <Ionicons name="repeat" size={13} color={theme.colors.textMuted} />
+                <Text variant="caption" color="textMuted">
+                  {recurrence}
+                </Text>
+              </View>
+            ) : null}
+
+            {showDueDate && task.dueDate ? (
               <View style={styles.metaItem}>
                 <Ionicons
                   name={overdue ? 'alert-circle' : 'calendar-outline'}

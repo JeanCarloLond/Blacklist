@@ -2,13 +2,17 @@ import { create } from 'zustand';
 
 import {
   archiveTask,
+  completedIdsForDay,
   createTask,
   deleteTask,
   listTasks,
   setTaskCompleted,
+  toggleCompletion,
   updateTask,
 } from '@/db/repositories';
 import type { NewTask, Task, TaskUpdate } from '@/domain/models';
+import { tasksForDay } from '@/domain/recurrence';
+import { todayKey } from '@/lib/date';
 
 import { getDatabase } from './database';
 
@@ -18,7 +22,12 @@ export type TaskFilterState = {
 };
 
 type TasksState = {
+  /** Lista de la pantalla de Tareas, sujeta al filtro activo. */
   tasks: Task[];
+  /** Lo que toca hoy, sin filtrar: la pantalla de Hoy ignora los filtros. */
+  todayTasks: Task[];
+  /** Ids de tareas recurrentes ya cumplidas hoy. */
+  completedToday: Set<string>;
   loading: boolean;
   filter: TaskFilterState;
 
@@ -30,30 +39,50 @@ type TasksState = {
   toggleComplete: (task: Task) => Promise<void>;
   archive: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+
+  /** True si la tarea cuenta como hecha hoy, sea única o recurrente. */
+  isDoneToday: (task: Task) => boolean;
 };
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   tasks: [],
+  todayTasks: [],
+  completedToday: new Set(),
   loading: false,
   filter: { search: '', categoryId: null },
 
   /**
-   * Recarga la lista aplicando el filtro actual.
+   * Recarga las dos listas y el registro de hoy.
+   *
+   * La lista filtrada se resuelve en SQL, pero la de hoy se filtra en memoria:
+   * "¿toca hoy esta tarea semanal?" no se expresa en SQL sin contorsiones, y el
+   * volumen (decenas o cientos de tareas) no justifica intentarlo.
    *
    * Se pide `includeCompleted` a propósito: al marcar una tarea queremos que se
-   * quede tachada en su sitio un momento, no que desaparezca de golpe bajo el
-   * dedo. El repositorio ya las devuelve ordenadas al final de la lista.
+   * quede tachada en su sitio un momento, no que desaparezca bajo el dedo.
    */
   refresh: async () => {
+    const db = getDatabase();
     const { filter } = get();
+    const today = todayKey();
+
     set({ loading: true });
     try {
-      const tasks = await listTasks(getDatabase(), {
-        search: filter.search,
-        categoryId: filter.categoryId ?? undefined,
-        includeCompleted: true,
+      const [filtered, all, doneToday] = await Promise.all([
+        listTasks(db, {
+          search: filter.search,
+          categoryId: filter.categoryId ?? undefined,
+          includeCompleted: true,
+        }),
+        listTasks(db, { includeCompleted: true }),
+        completedIdsForDay(db, 'task', today),
+      ]);
+
+      set({
+        tasks: filtered,
+        todayTasks: tasksForDay(all, today),
+        completedToday: doneToday,
       });
-      set({ tasks });
     } finally {
       set({ loading: false });
     }
@@ -75,36 +104,61 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   /**
-   * Alterna el estado de una tarea única.
+   * Alterna el estado de una tarea.
    *
-   * Se actualiza la lista en memoria antes de tocar la base para que el
-   * checkbox responda en el mismo fotograma de la pulsación. La escritura va
-   * después y la recarga confirma; si algo fallara, la recarga devolvería el
-   * estado real.
+   * Las únicas y las recurrentes se guardan en sitios distintos, y esa
+   * diferencia se resuelve aquí para que las pantallas no tengan que conocerla:
+   * una tarea única marca su `completedAt`, mientras que una recurrente escribe
+   * una fila del día en el registro de constancia, porque "hecha" para una
+   * tarea diaria solo significa algo junto a una fecha.
+   *
+   * La lista en memoria se actualiza antes de escribir para que el control
+   * responda en el mismo fotograma; la recarga posterior confirma.
    */
   toggleComplete: async (task) => {
-    const completed = task.completedAt === null;
-    const completedAt = completed ? new Date().toISOString() : null;
+    const db = getDatabase();
+    const today = todayKey();
 
-    set({
-      tasks: get().tasks.map((item) =>
-        item.id === task.id ? { ...item, completedAt } : item,
-      ),
-    });
+    if (task.recurrenceType === 'none') {
+      const completed = task.completedAt === null;
+      const completedAt = completed ? new Date().toISOString() : null;
+      const apply = (list: Task[]) =>
+        list.map((item) => (item.id === task.id ? { ...item, completedAt } : item));
 
-    await setTaskCompleted(getDatabase(), task.id, completed);
+      set({ tasks: apply(get().tasks), todayTasks: apply(get().todayTasks) });
+      await setTaskCompleted(db, task.id, completed);
+    } else {
+      const next = new Set(get().completedToday);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.add(task.id);
+
+      set({ completedToday: next });
+      await toggleCompletion(db, 'task', task.id, today);
+    }
+
     await get().refresh();
   },
 
   archive: async (id) => {
-    set({ tasks: get().tasks.filter((task) => task.id !== id) });
+    set({
+      tasks: get().tasks.filter((task) => task.id !== id),
+      todayTasks: get().todayTasks.filter((task) => task.id !== id),
+    });
     await archiveTask(getDatabase(), id);
     await get().refresh();
   },
 
   remove: async (id) => {
-    set({ tasks: get().tasks.filter((task) => task.id !== id) });
+    set({
+      tasks: get().tasks.filter((task) => task.id !== id),
+      todayTasks: get().todayTasks.filter((task) => task.id !== id),
+    });
     await deleteTask(getDatabase(), id);
     await get().refresh();
   },
+
+  isDoneToday: (task) =>
+    task.recurrenceType === 'none'
+      ? task.completedAt !== null
+      : get().completedToday.has(task.id),
 }));
