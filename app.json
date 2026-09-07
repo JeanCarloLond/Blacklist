@@ -2,16 +2,21 @@
   "expo": {
     "name": "BlackList",
     "slug": "BlackList",
+    "scheme": "blacklist",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jeancarlolond.blacklist"
     },
     "android": {
+      "package": "com.jeancarlolond.blacklist",
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F1115",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -20,6 +25,19 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#6C5CE7",
+          "defaultChannel": "recordatorios"
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true
     }
   }
 }
