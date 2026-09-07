@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { DatabaseProvider } from '@/providers/DatabaseProvider';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
 import { DesignSystemPreview } from '@/features/settings/screens/DesignSystemPreview';
 
@@ -20,8 +21,10 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <ThemedStatusBar />
-          {/* Provisional: se sustituye por el navegador de pestañas en el paso 4. */}
-          <DesignSystemPreview />
+          <DatabaseProvider>
+            {/* Provisional: se sustituye por el navegador de pestañas en el paso 4. */}
+            <DesignSystemPreview />
+          </DatabaseProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
