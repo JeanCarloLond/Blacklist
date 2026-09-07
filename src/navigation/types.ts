@@ -20,6 +20,8 @@ export type RootStackParamList = {
   DesignSystem: undefined;
   /** Sin `taskId` crea una tarea; con él, la edita. */
   TaskForm: { taskId?: string } | undefined;
+  /** Sin `goalId` crea una meta; con él, la edita. */
+  GoalForm: { goalId?: string } | undefined;
 };
 
 /**

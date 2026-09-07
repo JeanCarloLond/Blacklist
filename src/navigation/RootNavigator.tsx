@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { DesignSystemPreview } from '@/features/settings/screens/DesignSystemPreview';
 import { SettingsScreen } from '@/features/settings/screens/SettingsScreen';
+import { GoalFormScreen } from '@/features/goals/screens/GoalFormScreen';
 import { TaskFormScreen } from '@/features/tasks/screens/TaskFormScreen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toNavigationTheme } from '@/theme';
@@ -40,6 +41,11 @@ export function RootNavigator() {
         <Stack.Screen
           name="TaskForm"
           component={TaskFormScreen}
+          options={{ presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="GoalForm"
+          component={GoalFormScreen}
           options={{ presentation: 'modal' }}
         />
       </Stack.Navigator>

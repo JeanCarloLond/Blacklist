@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { useMemo } from 'react';
-import { Alert, FlatList, View } from 'react-native';
+import { Alert, SectionList, View } from 'react-native';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Fab } from '@/components/ui/Fab';
@@ -8,12 +8,16 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Text } from '@/components/ui/Text';
-import type { Task } from '@/domain/models';
+import type { Goal, Task } from '@/domain/models';
+import { GoalItem } from '@/features/goals/components/GoalItem';
 import { TaskItem } from '@/features/tasks/components/TaskItem';
 import { formatLongDay, isOverdue, todayKey } from '@/lib/date';
 import { useCategoriesStore } from '@/store/categoriesStore';
+import { useGoalsStore } from '@/store/goalsStore';
 import { useTasksStore } from '@/store/tasksStore';
 import { createStyles, useThemedStyles } from '@/theme/useThemedStyles';
+
+type HomeItem = { kind: 'goal'; goal: Goal } | { kind: 'task'; task: Task };
 
 /**
  * Mensaje de cabecera del resumen.
@@ -34,13 +38,22 @@ export function HomeScreen() {
   const styles = useThemedStyles(themedStyles);
 
   const todayTasks = useTasksStore((state) => state.todayTasks);
-  const isDoneToday = useTasksStore((state) => state.isDoneToday);
+  const isTaskDone = useTasksStore((state) => state.isDoneToday);
   const completedToday = useTasksStore((state) => state.completedToday);
-  const toggleComplete = useTasksStore((state) => state.toggleComplete);
-  const archive = useTasksStore((state) => state.archive);
-  const byId = useCategoriesStore((state) => state.byId);
+  const toggleTask = useTasksStore((state) => state.toggleComplete);
+  const archiveTask = useTasksStore((state) => state.archive);
 
+  const goalsForToday = useGoalsStore((state) => state.goalsForToday);
+  const todayValues = useGoalsStore((state) => state.todayValues);
+  const weekCounts = useGoalsStore((state) => state.weekCounts);
+  const isGoalDone = useGoalsStore((state) => state.isDoneToday);
+  const toggleGoal = useGoalsStore((state) => state.toggleToday);
+  const addProgress = useGoalsStore((state) => state.addProgress);
+
+  const byId = useCategoriesStore((state) => state.byId);
   const today = todayKey();
+
+  const goals = goalsForToday();
 
   /**
    * Orden de la jornada: primero lo pendiente, dentro de ello lo vencido, y
@@ -51,10 +64,14 @@ export function HomeScreen() {
    * recurrentes no vive en el objeto de la tarea, y sin él la lista no se
    * reordenaría al marcar una.
    */
-  const ordered = useMemo(() => {
+  const orderedTasks = useMemo(() => {
     const rank = (task: Task) => {
-      if (isDoneToday(task)) return 3;
-      if (task.dueDate !== null && task.recurrenceType === 'none' && isOverdue(task.dueDate, today)) {
+      if (isTaskDone(task)) return 3;
+      if (
+        task.dueDate !== null &&
+        task.recurrenceType === 'none' &&
+        isOverdue(task.dueDate, today)
+      ) {
         return 0;
       }
       return 1;
@@ -65,15 +82,42 @@ export function HomeScreen() {
       if (byRank !== 0) return byRank;
       return b.priority - a.priority;
     });
-  }, [todayTasks, isDoneToday, completedToday, today]);
+  }, [todayTasks, isTaskDone, completedToday, today]);
 
-  const total = ordered.length;
-  const done = ordered.filter((task) => isDoneToday(task)).length;
+  const sections = useMemo(() => {
+    const result: { title: string; data: HomeItem[] }[] = [];
+    if (goals.length > 0) {
+      result.push({
+        title: 'Metas',
+        data: goals.map((goal) => ({ kind: 'goal' as const, goal })),
+      });
+    }
+    if (orderedTasks.length > 0) {
+      result.push({
+        title: 'Tareas',
+        data: orderedTasks.map((task) => ({ kind: 'task' as const, task })),
+      });
+    }
+    return result;
+  }, [goals, orderedTasks]);
 
-  const confirmArchive = (task: Task) => {
+  const total = goals.length + orderedTasks.length;
+  const done =
+    goals.filter((goal) => isGoalDone(goal)).length +
+    orderedTasks.filter((task) => isTaskDone(task)).length;
+
+  const confirmTaskAction = (task: Task) => {
     Alert.alert(task.title, '¿Qué quieres hacer con esta tarea?', [
       { text: 'Editar', onPress: () => navigation.navigate('TaskForm', { taskId: task.id }) },
-      { text: 'Archivar', onPress: () => void archive(task.id) },
+      { text: 'Archivar', onPress: () => void archiveTask(task.id) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
+  const askWhatToCreate = () => {
+    Alert.alert('Crear', '¿Qué quieres añadir?', [
+      { text: 'Nueva tarea', onPress: () => navigation.navigate('TaskForm') },
+      { text: 'Nueva meta', onPress: () => navigation.navigate('GoalForm') },
       { text: 'Cancelar', style: 'cancel' },
     ]);
   };
@@ -93,9 +137,11 @@ export function HomeScreen() {
         />
       }
     >
-      <FlatList
-        data={ordered}
-        keyExtractor={(task) => task.id}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => (item.kind === 'goal' ? `g${item.goal.id}` : `t${item.task.id}`)}
+        extraData={[completedToday, todayValues]}
+        stickySectionHeadersEnabled={false}
         contentContainerStyle={[styles.list, total === 0 && styles.listEmpty]}
         ListHeaderComponent={
           total > 0 ? (
@@ -107,51 +153,70 @@ export function HomeScreen() {
                 </Text>
               </View>
               <ProgressBar
-                value={total === 0 ? 0 : done / total}
-                accessibilityLabel={`${done} de ${total} tareas completadas hoy`}
+                value={done / total}
+                accessibilityLabel={`${done} de ${total} completadas hoy`}
               />
             </View>
           ) : null
         }
-        renderItem={({ item }) => (
-          <TaskItem
-            task={item}
-            completed={isDoneToday(item)}
-            category={byId(item.categoryId)}
-            onToggle={() => void toggleComplete(item)}
-            onPress={() => navigation.navigate('TaskForm', { taskId: item.id })}
-            onLongPress={() => confirmArchive(item)}
-          />
+        renderSectionHeader={({ section }) => (
+          <Text variant="overline" color="textMuted" style={styles.sectionHeader}>
+            {section.title}
+          </Text>
         )}
+        renderItem={({ item }) =>
+          item.kind === 'goal' ? (
+            <GoalItem
+              goal={item.goal}
+              value={todayValues.get(item.goal.id) ?? 0}
+              weekCount={weekCounts.get(item.goal.id) ?? 0}
+              onToggle={() => void toggleGoal(item.goal)}
+              onAddProgress={(delta) => void addProgress(item.goal, delta)}
+              onPress={() => navigation.navigate('GoalForm', { goalId: item.goal.id })}
+              onLongPress={() => navigation.navigate('GoalForm', { goalId: item.goal.id })}
+            />
+          ) : (
+            <TaskItem
+              task={item.task}
+              completed={isTaskDone(item.task)}
+              category={byId(item.task.categoryId)}
+              onToggle={() => void toggleTask(item.task)}
+              onPress={() => navigation.navigate('TaskForm', { taskId: item.task.id })}
+              onLongPress={() => confirmTaskAction(item.task)}
+            />
+          )
+        }
         ListEmptyComponent={
           <EmptyState
             icon="sunny-outline"
             title="Nada pendiente por ahora"
-            message="Cuando crees tareas con fecha o que se repitan, aquí verás lo que toca cada día."
+            message="Crea una meta para medir tu constancia, o una tarea con fecha. Lo que toque cada día aparecerá aquí."
           />
         }
       />
 
-      <Fab onPress={() => navigation.navigate('TaskForm')} accessibilityLabel="Crear tarea" />
+      <Fab onPress={askWhatToCreate} accessibilityLabel="Crear tarea o meta" />
     </Screen>
   );
 }
 
 const themedStyles = createStyles((theme) => ({
   list: {
-    gap: theme.spacing.md,
     paddingHorizontal: theme.layout.screenPadding,
     paddingTop: theme.spacing.xs,
-    // Deja sitio para que el botón flotante no tape la última tarea.
+    // Deja sitio para que el botón flotante no tape el último elemento.
     paddingBottom: theme.layout.fab + theme.spacing.xxl,
+    gap: theme.spacing.md,
   },
   listEmpty: {
     flexGrow: 1,
   },
+  sectionHeader: {
+    marginTop: theme.spacing.sm,
+  },
   summary: {
     gap: theme.spacing.md,
     padding: theme.spacing.lg,
-    marginBottom: theme.spacing.xs,
     borderRadius: theme.radius.lg,
     backgroundColor: theme.colors.accentSoft,
   },

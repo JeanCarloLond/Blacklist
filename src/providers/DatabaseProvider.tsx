@@ -6,6 +6,7 @@ import { DATABASE_NAME, initializeDatabase } from '@/db/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useCategoriesStore } from '@/store/categoriesStore';
 import { setDatabase } from '@/store/database';
+import { useGoalsStore } from '@/store/goalsStore';
 import { useTasksStore } from '@/store/tasksStore';
 
 function DatabaseLoading() {
@@ -43,6 +44,7 @@ function DatabaseBridge({ children }: { children: ReactNode }) {
     void Promise.all([
       useCategoriesStore.getState().refresh(),
       useTasksStore.getState().refresh(),
+      useGoalsStore.getState().refresh(),
     ]).finally(() => {
       if (active) setReady(true);
     });

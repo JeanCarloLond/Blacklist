@@ -222,3 +222,47 @@ export async function deleteCompletionsFor(
     entityId,
   );
 }
+
+/**
+ * Valores registrados hoy por entidad.
+ *
+ * Las metas cuantitativas necesitan la cantidad, no solo saber si hay registro,
+ * así que esto complementa a `completedIdsForDay`: una sola consulta resuelve el
+ * avance de toda la lista en lugar de una por meta.
+ */
+export async function valuesForDay(
+  db: SQLiteDatabase,
+  entityType: CompletionEntity,
+  day: DayKey = todayKey(),
+): Promise<Map<string, number>> {
+  const rows = await db.getAllAsync<{ entity_id: string; value: number }>(
+    'SELECT entity_id, value FROM completion_log WHERE entity_type = ? AND day = ?',
+    entityType,
+    day,
+  );
+  return new Map(rows.map((row) => [row.entity_id, row.value]));
+}
+
+/**
+ * Días distintos con registro por entidad dentro de un rango.
+ *
+ * Alimenta las metas de tipo "x veces por semana", que se miden por días
+ * cumplidos en la semana y no por días consecutivos.
+ */
+export async function completionCountsInRange(
+  db: SQLiteDatabase,
+  entityType: CompletionEntity,
+  from: DayKey,
+  to: DayKey,
+): Promise<Map<string, number>> {
+  const rows = await db.getAllAsync<{ entity_id: string; days: number }>(
+    `SELECT entity_id, COUNT(DISTINCT day) AS days
+     FROM completion_log
+     WHERE entity_type = ? AND day BETWEEN ? AND ?
+     GROUP BY entity_id`,
+    entityType,
+    from,
+    to,
+  );
+  return new Map(rows.map((row) => [row.entity_id, row.days]));
+}
