@@ -6,6 +6,11 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 export type ScreenProps = {
   children: ReactNode;
+  /**
+   * Cabecera fija, fuera del área desplazable. Se pasa por aquí en vez de como
+   * primer hijo para que el botón de volver no se vaya con el scroll.
+   */
+  header?: ReactNode;
   /** Envuelve el contenido en un `ScrollView`. */
   scroll?: boolean;
   /** Aplica el margen lateral estándar. Desactívalo en listas a sangre. */
@@ -25,6 +30,7 @@ export type ScreenProps = {
  */
 export function Screen({
   children,
+  header,
   scroll = false,
   padded = true,
   edges = ['top'],
@@ -38,6 +44,7 @@ export function Screen({
       edges={edges}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     >
+      {header}
       {scroll ? (
         <ScrollView
           contentContainerStyle={[

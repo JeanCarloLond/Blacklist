@@ -2,9 +2,9 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { RootNavigator } from '@/navigation/RootNavigator';
 import { DatabaseProvider } from '@/providers/DatabaseProvider';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
-import { DesignSystemPreview } from '@/features/settings/screens/DesignSystemPreview';
 
 /**
  * Pinta la barra de estado acorde al tema. Vive en un componente aparte porque
@@ -22,8 +22,7 @@ export default function App() {
         <ThemeProvider>
           <ThemedStatusBar />
           <DatabaseProvider>
-            {/* Provisional: se sustituye por el navegador de pestañas en el paso 4. */}
-            <DesignSystemPreview />
+            <RootNavigator />
           </DatabaseProvider>
         </ThemeProvider>
       </SafeAreaProvider>

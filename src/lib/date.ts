@@ -98,6 +98,10 @@ const MONTH_LABELS = [
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ] as const;
 
+const WEEKDAY_FULL = [
+  'domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado',
+] as const;
+
 /** 'Lun', 'Mar', ... a partir del índice de día de semana. */
 export function weekdayLabel(weekday: Weekday): string {
   return WEEKDAY_LABELS[weekday] ?? '';
@@ -129,4 +133,10 @@ export function formatRelativeDay(key: DayKey, reference: DayKey = todayKey()): 
 /** True si la fecha ya pasó respecto de hoy (tarea vencida). */
 export function isOverdue(key: DayKey, reference: DayKey = todayKey()): boolean {
   return daysBetween(reference, key) < 0;
+}
+
+/** 'domingo, 7 de septiembre' — para la cabecera de la pantalla de hoy. */
+export function formatLongDay(key: DayKey): string {
+  const weekday = WEEKDAY_FULL[weekdayOf(key)] ?? '';
+  return `${weekday}, ${formatDayMonth(key)}`;
 }

@@ -1,18 +1,19 @@
-import { Pressable, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { View } from 'react-native';
 
 import { Screen } from '@/components/ui/Screen';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { Text } from '@/components/ui/Text';
-import { useThemePreference } from '@/providers/ThemeProvider';
 import { createStyles, useThemedStyles } from '@/theme/useThemedStyles';
-import type { ThemePreference, TypographyVariant } from '@/theme';
+import type { TypographyVariant } from '@/theme';
 
 /**
  * Guía viva del sistema de diseño.
  *
  * No es una pantalla de producto: sirve para ver de un vistazo que los tokens se
- * comportan igual en claro y en oscuro. Se conserva colgada de Ajustes porque
- * comprobar un contraste aquí es mucho más rápido que ir a buscar la pantalla
- * real donde se usa ese color.
+ * comportan igual en claro y en oscuro. Cuelga de Ajustes porque comprobar un
+ * contraste aquí es mucho más rápido que ir a buscar la pantalla real donde se
+ * usa ese color.
  */
 
 const TYPE_SAMPLES: [TypographyVariant, string][] = [
@@ -28,42 +29,21 @@ const TYPE_SAMPLES: [TypographyVariant, string][] = [
 
 const STATUS_TOKENS = ['accent', 'success', 'warning', 'danger', 'info'] as const;
 
-const PREFERENCES: [ThemePreference, string][] = [
-  ['system', 'Sistema'],
-  ['light', 'Claro'],
-  ['dark', 'Oscuro'],
-];
-
 export function DesignSystemPreview() {
+  const navigation = useNavigation();
   const styles = useThemedStyles(themedStyles);
-  const { preference, setPreference } = useThemePreference();
 
   return (
-    <Screen scroll>
-      <Text variant="title" style={styles.screenTitle}>
-        Sistema de diseño
-      </Text>
-
-      <Text variant="overline" color="textMuted" style={styles.sectionLabel}>
-        Tema
-      </Text>
-      <View style={styles.row}>
-        {PREFERENCES.map(([value, label]) => {
-          const active = preference === value;
-          return (
-            <Pressable
-              key={value}
-              onPress={() => setPreference(value)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text variant="label" color={active ? 'textOnAccent' : 'textSecondary'}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
+    <Screen
+      scroll
+      header={
+        <ScreenHeader
+          title="Sistema de diseño"
+          subtitle="Referencia de tokens"
+          onBack={() => navigation.goBack()}
+        />
+      }
+    >
       <Text variant="overline" color="textMuted" style={styles.sectionLabel}>
         Tipografía
       </Text>
@@ -118,10 +98,6 @@ export function DesignSystemPreview() {
 }
 
 const themedStyles = createStyles((theme) => ({
-  screenTitle: {
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
-  },
   sectionLabel: {
     marginTop: theme.spacing.xxl,
     marginBottom: theme.spacing.md,
@@ -142,19 +118,6 @@ const themedStyles = createStyles((theme) => ({
   },
   typeRow: {
     gap: 2,
-  },
-  chip: {
-    minHeight: 38,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surface,
-    borderWidth: theme.layout.borderWidth,
-    borderColor: theme.colors.border,
-  },
-  chipActive: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
   },
   swatchGroup: {
     alignItems: 'center',
