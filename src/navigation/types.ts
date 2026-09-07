@@ -18,6 +18,8 @@ export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList>;
   Settings: undefined;
   DesignSystem: undefined;
+  /** Sin `taskId` crea una tarea; con él, la edita. */
+  TaskForm: { taskId?: string } | undefined;
 };
 
 /**
